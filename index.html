@@ -47,7 +47,7 @@
 
         // Fetch available sensors
         try {
-            const sensorsResponse = await fetch("http://127.0.0.1:3000/sensors");
+            const sensorsResponse = await fetch("https://89d4-189-60-226-81.ngrok-free.app/sensors");
             const sensorsData = await sensorsResponse.json();
             sensorsData.sensors.forEach((sensor) => {
                 const option = document.createElement("option");
@@ -65,7 +65,7 @@
             if (!selectedSensor) return;
 
             try {
-                const response = await fetch("http://127.0.0.1:3000/query-sensor", {
+                const response = await fetch("https://89d4-189-60-226-81.ngrok-free.app/query-sensor", {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
@@ -78,7 +78,7 @@
 
                 // Total amount of KW used
                 const totalKwUsed = cumulativeValues[cumulativeValues.length - 1];
-                totalKwDiv.textContent = `Total Amount of KW Used: ${totalKwUsed.toFixed(2)}`;
+                totalKwDiv.textContent = `Total Amount of W Used: ${totalKwUsed.toFixed(2)}`;
 
                 // Update Value Chart
                 if (valueChart) valueChart.destroy();
