@@ -47,7 +47,7 @@
 
         // Fetch available sensors
         try {
-            const sensorsResponse = await fetch("https://89d4-189-60-226-81.ngrok-free.app/sensors");
+            const sensorsResponse = await fetch("http://127.0.0.1:3000/sensors");
             const sensorsData = await sensorsResponse.json();
             sensorsData.sensors.forEach((sensor) => {
                 const option = document.createElement("option");
@@ -65,7 +65,7 @@
             if (!selectedSensor) return;
 
             try {
-                const response = await fetch("https://89d4-189-60-226-81.ngrok-free.app/query-sensor", {
+                const response = await fetch("http://127.0.0.1:3000/query-sensor", {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
