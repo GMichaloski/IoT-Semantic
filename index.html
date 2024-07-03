@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sensor Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .charts {
+            display: flex;
+            justify-content: space-between;
+        }
+        canvas {
+            width: 45% !important;
+            height: 300px !important;
+        }
+        .total-kw {
+            margin-top: 20px;
+            font-size: 18px;
+        }
+    </style>
+</head>
+<body>
+<div>
+    <h1>Sensor Dashboard</h1>
+    <label for="sensorSelect">Choose a sensor:</label>
+    <select id="sensorSelect"></select>
+    <button id="fetchDataBtn">Fetch Data</button>
+</div>
+
+<div class="charts">
+    <canvas id="valueChart"></canvas>
+    <canvas id="cumulativeChart"></canvas>
+</div>
+
+<div class="total-kw" id="totalKw">Total Amount of W Used: 0</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", async () => {
+        const sensorSelect = document.getElementById("sensorSelect");
+        const fetchDataBtn = document.getElementById("fetchDataBtn");
+        const valueChartCtx = document.getElementById("valueChart").getContext("2d");
+        const cumulativeChartCtx = document.getElementById("cumulativeChart").getContext("2d");
+        const totalKwDiv = document.getElementById("totalKw");
+
+        let valueChart, cumulativeChart;
+
+        // Fetch available sensors
+        try {
+            const sensorsResponse = await fetch("http://127.0.0.1:3000/sensors");
+            const sensorsData = await sensorsResponse.json();
+            sensorsData.sensors.forEach((sensor) => {
+                const option = document.createElement("option");
+                option.value = sensor;
+                option.textContent = sensor;
+                sensorSelect.appendChild(option);
+            });
+        } catch (error) {
+            console.error("Error fetching sensors:", error);
+        }
+
+        // Fetch sensor data and update chart
+        fetchDataBtn.addEventListener("click", async () => {
+            const selectedSensor = sensorSelect.value;
+            if (!selectedSensor) return;
+
+            try {
+                const response = await fetch("http://127.0.0.1:3000/query-sensor", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ sensorName: selectedSensor }),
+                });
+
+                const data = await response.json();
+                const { timestamps, values, cumulativeValues } = data.cleanedData;
+
+                // Total amount of KW used
+                const totalKwUsed = cumulativeValues[cumulativeValues.length - 1];
+                totalKwDiv.textContent = `Total Amount of KW Used: ${totalKwUsed.toFixed(2)}`;
+
+                // Update Value Chart
+                if (valueChart) valueChart.destroy();
+                valueChart = new Chart(valueChartCtx, {
+                    type: "line",
+                    data: {
+                        labels: timestamps,
+                        datasets: [
+                            {
+                                label: "Sensor Values",
+                                data: values,
+                                borderColor: "blue",
+                                fill: false,
+                            },
+                        ],
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            x: { display: true, title: { display: true, text: "Timestamp" } },
+                            y: { display: true, title: { display: true, text: "Value" } },
+                        },
+                    },
+                });
+
+                // Update Cumulative Chart
+                if (cumulativeChart) cumulativeChart.destroy();
+                cumulativeChart = new Chart(cumulativeChartCtx, {
+                    type: "line",
+                    data: {
+                        labels: timestamps,
+                        datasets: [
+                            {
+                                label: "Cumulative Values",
+                                data: cumulativeValues,
+                                borderColor: "green",
+                                fill: false,
+                            },
+                        ],
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            x: { display: true, title: { display: true, text: "Timestamp" } },
+                            y: { display: true, title: { display: true, text: "Cumulative Value" } },
+                        },
+                    },
+                });
+            } catch (error) {
+                console.error("Error fetching sensor data:", error);
+            }
+        });
+    });
+</script>
+</body>
+</html>
