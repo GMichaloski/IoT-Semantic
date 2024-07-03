@@ -17,6 +17,20 @@
         .total-kw {
             margin-top: 20px;
             font-size: 18px;
+            text-align: left;
+        }
+        .donut-chart {
+            display: table-row;
+            width: 45% !important;
+            height: 300px !important;
+            margin-top: 20px;
+            text-align: center;
+        }
+        .energy-chart {
+            width: 45% !important;
+            height: 45% !important;
+            display: flex;
+            justify-content: space-between;
         }
     </style>
 </head>
@@ -33,7 +47,18 @@
     <canvas id="cumulativeChart"></canvas>
 </div>
 
-<div class="total-kw" id="totalKw">Total Amount of W Used: 0</div>
+<div class="total-kw" id="totalKw">Total Amount of W Used by Sensor: 0</div>
+
+<div class="charts">
+    <div class="donut-chart">
+    <canvas id="donutChart"></canvas>
+    </div>
+
+    <div class="energy-chart">
+    <canvas id="energyChart"></canvas>
+    </div>
+</div>
+
 
 <script>
     document.addEventListener("DOMContentLoaded", async () => {
@@ -41,9 +66,11 @@
         const fetchDataBtn = document.getElementById("fetchDataBtn");
         const valueChartCtx = document.getElementById("valueChart").getContext("2d");
         const cumulativeChartCtx = document.getElementById("cumulativeChart").getContext("2d");
+        const donutChartCtx = document.getElementById("donutChart").getContext("2d");
+        const energyChartCtx = document.getElementById("energyChart").getContext("2d");
         const totalKwDiv = document.getElementById("totalKw");
 
-        let valueChart, cumulativeChart;
+        let valueChart, cumulativeChart, donutChart, energyChart;
 
         // Fetch available sensors
         try {
@@ -59,7 +86,89 @@
             console.error("Error fetching sensors:", error);
         }
 
-        // Fetch sensor data and update chart
+        // Fetch total consumption by all sensors and render donut chart
+        try {
+            const totalUsageResponse = await fetch("http://127.0.0.1:3000/sensor-total");
+            const totalUsageData = await totalUsageResponse.json();
+            const sensorTotals = totalUsageData.sensorTotals;
+
+            // Sort sensors by total consumption and take the top 5
+            sensorTotals.sort((a, b) => b.totalConsumption - a.totalConsumption);
+            const topSensors = sensorTotals.slice(0, 5);
+            const otherSensors = sensorTotals.slice(5);
+            const totalUsage = sensorTotals.reduce((acc, sensor) => acc + sensor.totalConsumption, 0);
+            const otherTotal = otherSensors.reduce((acc, sensor) => acc + sensor.totalConsumption, 0);
+
+            // Prepare data for donut chart
+            const donutData = topSensors.map(sensor => ({
+                label: sensor.sensor,
+                value: sensor.totalConsumption
+            }));
+
+            if (otherTotal > 0) {
+                donutData.push({
+                    label: 'Other',
+                    value: otherTotal
+                });
+            }
+
+            // Render Donut Chart
+            donutChart = new Chart(donutChartCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: donutData.map(data => data.label),
+                    datasets: [{
+                        data: donutData.map(data => data.value),
+                        backgroundColor: [
+                            'rgba(255, 99, 132, 0.2)',
+                            'rgba(54, 162, 235, 0.2)',
+                            'rgba(255, 206, 86, 0.2)',
+                            'rgba(75, 192, 192, 0.2)',
+                            'rgba(153, 102, 255, 0.2)',
+                            'rgba(255, 159, 64, 0.2)'
+                        ],
+                        borderColor: [
+                            'rgba(255, 99, 132, 1)',
+                            'rgba(54, 162, 235, 1)',
+                            'rgba(255, 206, 86, 1)',
+                            'rgba(75, 192, 192, 1)',
+                            'rgba(153, 102, 255, 1)',
+                            'rgba(255, 159, 64, 1)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed !== null) {
+                                        label += `${context.raw.toFixed(2)} W (${(context.raw / totalUsage * 100).toFixed(2)}%)`;
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Update total amount of W used in the house
+            totalKwDiv.textContent = `Total Amount of W Used in House: ${totalUsage.toFixed(2)}`;
+        } catch (error) {
+            console.error("Error fetching total sensor usage data:", error);
+        }
+
+        // Fetch sensor data and update charts
         fetchDataBtn.addEventListener("click", async () => {
             const selectedSensor = sensorSelect.value;
             if (!selectedSensor) return;
@@ -78,7 +187,7 @@
 
                 // Total amount of KW used
                 const totalKwUsed = cumulativeValues[cumulativeValues.length - 1];
-                totalKwDiv.textContent = `Total Amount of W Used: ${totalKwUsed.toFixed(2)}`;
+                totalKwDiv.textContent = `Total Amount of W Used by Sensor: ${totalKwUsed.toFixed(2)}`;
 
                 // Update Value Chart
                 if (valueChart) valueChart.destroy();
