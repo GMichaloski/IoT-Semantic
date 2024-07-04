@@ -6,32 +6,12 @@
     <title>Sensor Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        .charts {
-            display: flex;
-            justify-content: space-between;
-        }
-        canvas {
-            width: 45% !important;
-            height: 300px !important;
-        }
-        .total-kw {
-            margin-top: 20px;
-            font-size: 18px;
-            text-align: left;
-        }
-        .donut-chart {
-            display: table-row;
-            width: 45% !important;
-            height: 300px !important;
-            margin-top: 20px;
-            text-align: center;
-        }
-        .energy-chart {
-            width: 45% !important;
-            height: 45% !important;
-            display: flex;
-            justify-content: space-between;
-        }
+        .charts { display: flex; justify-content: space-between; }
+        canvas { width: 45% !important; height: 300px !important; }
+        .total-kw { margin-top: 20px; font-size: 18px; text-align: left; }
+        .donut-charts { display: flex; justify-content: space-between; width: 100%; }
+        .donut-chart { width: 45% !important; height: 300px !important; margin-top: 20px; text-align: center; }
+        .energy-chart { width: 45% !important; height: 45% !important; display: flex; justify-content: space-between; }
     </style>
 </head>
 <body>
@@ -41,25 +21,24 @@
     <select id="sensorSelect"></select>
     <button id="fetchDataBtn">Fetch Data</button>
 </div>
-
 <div class="charts">
     <canvas id="valueChart"></canvas>
     <canvas id="cumulativeChart"></canvas>
 </div>
-
 <div class="total-kw" id="totalKw">Total Amount of W Used by Sensor: 0</div>
-
-<div class="charts">
+<div class="charts donut-charts">
     <div class="donut-chart">
-    <canvas id="donutChart"></canvas>
+        <canvas id="donutChart"></canvas>
     </div>
-
-    <div class="energy-chart">
-    <canvas id="energyChart"></canvas>
+    <div class="donut-chart">
+        <canvas id="comparisonDonutChart"></canvas>
     </div>
 </div>
-
-
+<div class="charts">
+    <div class="energy-chart">
+        <canvas id="energyChart"></canvas>
+    </div>
+</div>
 <script>
     document.addEventListener("DOMContentLoaded", async () => {
         const sensorSelect = document.getElementById("sensorSelect");
@@ -68,9 +47,9 @@
         const cumulativeChartCtx = document.getElementById("cumulativeChart").getContext("2d");
         const donutChartCtx = document.getElementById("donutChart").getContext("2d");
         const energyChartCtx = document.getElementById("energyChart").getContext("2d");
+        const comparisonDonutChartCtx = document.getElementById("comparisonDonutChart").getContext("2d");
         const totalKwDiv = document.getElementById("totalKw");
-
-        let valueChart, cumulativeChart, donutChart, energyChart;
+        let valueChart, cumulativeChart, donutChart, energyChart, comparisonDonutChart;
 
         // Fetch available sensors
         try {
@@ -100,16 +79,9 @@
             const otherTotal = otherSensors.reduce((acc, sensor) => acc + sensor.totalConsumption, 0);
 
             // Prepare data for donut chart
-            const donutData = topSensors.map(sensor => ({
-                label: sensor.sensor,
-                value: sensor.totalConsumption
-            }));
-
+            const donutData = topSensors.map(sensor => ({ label: sensor.sensor, value: sensor.totalConsumption }));
             if (otherTotal > 0) {
-                donutData.push({
-                    label: 'Other',
-                    value: otherTotal
-                });
+                donutData.push({ label: 'Other', value: otherTotal });
             }
 
             // Render Donut Chart
@@ -146,13 +118,64 @@
                         },
                         tooltip: {
                             callbacks: {
-                                label: function(context) {
+                                label: function (context) {
                                     let label = context.label || '';
                                     if (label) {
                                         label += ': ';
                                     }
                                     if (context.parsed !== null) {
                                         label += `${context.raw.toFixed(2)} W (${(context.raw / totalUsage * 100).toFixed(2)}%)`;
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Prepare data for comparison donut chart
+            const generatedEnergy = sensorTotals.find(sensor => sensor.sensor === 'gen_kW')?.totalConsumption || 0;
+            const consumedEnergy = totalUsage - generatedEnergy;
+
+            const comparisonData = [
+                { label: 'Consumed Energy', value: consumedEnergy },
+                { label: 'Generated Energy', value: generatedEnergy }
+            ];
+
+            // Render Comparison Donut Chart
+            comparisonDonutChart = new Chart(comparisonDonutChartCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: comparisonData.map(data => data.label),
+                    datasets: [{
+                        data: comparisonData.map(data => data.value),
+                        backgroundColor: [
+                            'rgba(255, 99, 132, 0.2)',
+                            'rgb(255,195,0, 0.2)'
+                        ],
+                        borderColor: [
+                            'rgba(255, 99, 132, 1)',
+                            'rgb(255,195,0)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function (context) {
+                                    let label = context.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed !== null) {
+                                        label += `${context.raw.toFixed(2)} W (${(context.raw / (consumedEnergy + generatedEnergy) * 100).toFixed(2)}%)`;
                                     }
                                     return label;
                                 }
@@ -172,16 +195,12 @@
         fetchDataBtn.addEventListener("click", async () => {
             const selectedSensor = sensorSelect.value;
             if (!selectedSensor) return;
-
             try {
                 const response = await fetch("http://127.0.0.1:3000/query-sensor", {
                     method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
+                    headers: { "Content-Type": "application/json", },
                     body: JSON.stringify({ sensorName: selectedSensor }),
                 });
-
                 const data = await response.json();
                 const { timestamps, values, cumulativeValues } = data.cleanedData;
 
